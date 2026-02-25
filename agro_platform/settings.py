@@ -80,7 +80,9 @@ WSGI_APPLICATION = "agro_platform.wsgi.application"
 # DATABASE
 # ========================
 DATABASES = {
-    'default': dj_database_url.config(default=os.getenv('DATABASE_URL'))
+    'default': dj_database_url.parse(
+        config("DATABASE_URL")
+    )
 }
 
 # ========================
