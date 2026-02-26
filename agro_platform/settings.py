@@ -9,7 +9,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ========================
 # SECURITY
 # ========================
-SECRET_KEY = config("SECRET_KEY")
+SECRET_KEY = os.environ.get("SECRET_KEY")
+print("SECRET:", SECRET_KEY)
 DEBUG = config("DEBUG", cast=bool)
 
 ALLOWED_HOSTS = ['*']  # on sécurisera après
