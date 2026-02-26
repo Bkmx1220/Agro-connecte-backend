@@ -10,8 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY
 # ========================
 SECRET_KEY = os.environ.get("SECRET_KEY")
-print("SECRET:", SECRET_KEY)
-DEBUG = config("DEBUG", cast=bool)
+DEBUG = os.environ.get("DEBUG") == "True"
 
 ALLOWED_HOSTS = ['*']  # on sécurisera après
 
@@ -81,8 +80,10 @@ WSGI_APPLICATION = "agro_platform.wsgi.application"
 # DATABASE
 # ========================
 DATABASES = {
-    'default': dj_database_url.parse(
-        config("DATABASE_URL")
+    "default": dj_database_url.config(
+        default=os.environ.get("DATABASE_URL"),
+        conn_max_age=600,
+        ssl_require=True
     )
 }
 
