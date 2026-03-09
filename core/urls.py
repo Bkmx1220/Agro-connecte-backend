@@ -1,3 +1,4 @@
+from django.http import HttpResponse
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
@@ -32,5 +33,5 @@ urlpatterns = [
     path("me/", MeAPIView.as_view()),
 
     # Routes API
-    path('', include(router.urls)),
+ path("", lambda request: HttpResponse("AgroConnect API running 🚀")),
 ]
