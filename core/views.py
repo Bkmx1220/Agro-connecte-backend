@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.views import APIView
 
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -22,11 +23,16 @@ from .permissions import (
     IsOwnerOrReadOnly,
     IsExpert,
 )
+from rest_framework.decorators import api_view, permission_classes
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from .models import Module
+from .serializers import ModuleSerializer
 
 User = get_user_model()
 
 # ============================================================
-# 🔐 LOGIN JWT PERSONNALISÉ (email OU username)
+# LOGIN JWT PERSONNALISÉ (email OU username)
 # ============================================================
 class LoginAPIView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
@@ -74,12 +80,13 @@ class LoginAPIView(generics.GenericAPIView):
                 "email": user.email,
                 "role": user.role,
                 "is_staff": user.is_staff,
+                "is_verified": user.is_verified,
             }
         })
 
 
 # ============================================================
-# 🔁 REFRESH JWT
+# REFRESH JWT
 # ============================================================
 class RefreshAPIView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
@@ -112,7 +119,7 @@ class RegisterAPIView(generics.CreateAPIView):
 
 
 # ============================================================
-# 👤 PROFIL UTILISATEUR CONNECTÉ (PAYSAN)
+# PROFIL UTILISATEUR CONNECTÉ (PAYSAN)
 # GET / PUT → /api/me/
 # ============================================================
 class MeAPIView(generics.RetrieveUpdateAPIView):
@@ -182,7 +189,7 @@ class ExpertViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================
-# 🌾 PAYSAN VIEWSET
+# PAYSAN VIEWSET
 # ============================================================
 class PaysanViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
@@ -195,7 +202,7 @@ class PaysanViewSet(viewsets.ViewSet):
     def me(self, request):
         user = request.user
 
-        # 🔒 Sécurité : uniquement paysan
+        # Sécurité : uniquement paysan
         if user.role != "paysan":
             raise PermissionDenied("Accès réservé aux paysans")
 
@@ -294,3 +301,108 @@ class MessageViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save()
 
+
+# ============================================================
+#  ADMIN API (VALIDATION UTILISATEURS)
+# ============================================================
+
+
+class AdminVerifyUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, user_id):
+        if request.user.role != "admin":
+            raise PermissionDenied("Accès réservé à l'admin")
+
+        try:
+            user = User.objects.get(id=user_id)
+            user.is_verified = True
+            user.save()
+            return Response({"message": "Utilisateur validé"})
+        except User.DoesNotExist:
+            return Response({"error": "Utilisateur introuvable"}, status=404)
+
+
+class AdminDeleteUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, user_id):
+        if request.user.role != "admin":
+            raise PermissionDenied("Accès réservé à l'admin")
+
+        try:
+            user = User.objects.get(id=user_id)
+            user.delete()
+            return Response({"message": "Utilisateur supprimé"})
+        except User.DoesNotExist:
+            return Response({"error": "Utilisateur introuvable"}, status=404)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_pending_users(request):
+    if request.user.role != "admin":
+        raise PermissionDenied("Accès réservé à l'admin")
+
+    users = User.objects.filter(is_verified=False)
+
+    data = [
+        {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "role": u.role,
+        }
+        for u in users
+    ]
+
+    return Response(data)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@csrf_exempt
+def admin_verify_user(request, user_id):
+    if request.user.role != "admin":
+        raise PermissionDenied("Accès réservé à l'admin")
+
+    try:
+        user = User.objects.get(id=user_id)
+        user.is_verified = True
+        user.save()
+        return Response({"message": "Utilisateur validé"})
+    except User.DoesNotExist:
+        return Response({"error": "Utilisateur introuvable"}, status=404)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+@csrf_exempt
+def admin_delete_user(request, user_id):
+    if request.user.role != "admin":
+        raise PermissionDenied("Accès réservé à l'admin")
+
+    try:
+        user = User.objects.get(id=user_id)
+        user.delete()
+        return Response({"message": "Utilisateur supprimé"})
+    except User.DoesNotExist:
+        return Response({"error": "Utilisateur introuvable"}, status=404)
+    
+
+class ModuleViewSet(viewsets.ModelViewSet):
+    queryset = Module.objects.all().order_by("-created_at")
+    serializer_class = ModuleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # tout le monde peut voir les modules validés
+        return Module.objects.all()
+
+    def perform_create(self, serializer):
+        # seul expert peut créer
+        if self.request.user.role != "expert":
+            raise PermissionDenied("Seuls les experts peuvent publier")
+
+        serializer.save(expert=self.request.user)

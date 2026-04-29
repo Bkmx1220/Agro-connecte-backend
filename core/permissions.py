@@ -44,7 +44,7 @@ class IsPaysan(permissions.BasePermission):
         )
 
 
-# 🔥 IMPORTANT : Consultation (security)
+# IMPORTANT : Consultation (security)
 class IsConsultationParticipant(permissions.BasePermission):
     """Autorise seulement le paysan, l’expert assigné ou l’admin."""
     def has_object_permission(self, request, view, consultation):
@@ -55,7 +55,7 @@ class IsConsultationParticipant(permissions.BasePermission):
         )
 
 
-# 🔥 IMPORTANT : Messages (chat security)
+# IMPORTANT : Messages (chat security)
 class IsMessageParticipant(permissions.BasePermission):
     """Seuls l’expéditeur et le destinataire peuvent accéder au message."""
     def has_object_permission(self, request, view, message):
@@ -64,3 +64,8 @@ class IsMessageParticipant(permissions.BasePermission):
             message.sender == request.user or
             message.receiver == request.user
         )
+
+# IMPORTANT : Admin - Gestion des utilisateurs
+class IsAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == "admin"

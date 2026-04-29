@@ -3,14 +3,13 @@ from decouple import config
 from datetime import timedelta
 import os
 import dj_database_url
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ========================
 # SECURITY
 # ========================
-SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-secret-key")
-DEBUG = os.environ.get("DEBUG") == "True"
+SECRET_KEY = config("SECRET_KEY")
+DEBUG = config("DEBUG", cast=bool)
 
 ALLOWED_HOSTS = ['*']  # on sécurisera après
 
@@ -80,11 +79,14 @@ WSGI_APPLICATION = "agro_platform.wsgi.application"
 # DATABASE
 # ========================
 DATABASES = {
-    "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL"),
-        conn_max_age=600,
-        ssl_require=True
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST', default='127.0.0.1'),
+        'PORT': config('DB_PORT', default='3306'),
+    }
 }
 
 # ========================
@@ -131,6 +133,9 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
 ]
 
+CSRF_COOKIE_HTTPONLY = False
+CSRF_USE_SESSIONS = False
+
 # ========================
 # I18N
 # ========================
@@ -145,3 +150,10 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ========================
+# MEDIA
+# ========================
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

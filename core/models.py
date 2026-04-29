@@ -9,11 +9,13 @@ class User(AbstractUser):
     ROLE_CHOICES = (
         ('paysan', 'Paysan'),
         ('expert', 'Expert'),
+        ('admin', 'Admin'),
     )
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='paysan')
     phone = models.CharField(max_length=20, blank=True, null=True)
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
+    is_verified = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.username} ({self.role})"
@@ -111,3 +113,21 @@ class Message(models.Model):
 
     def __str__(self):
         return self.content[:20]
+    
+# =====================================================
+# MODULE (GUIDES EXPERT)
+# =====================================================
+class Module(models.Model):
+    expert = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="modules"
+    )
+
+    titre = models.CharField(max_length=255)
+    description = models.TextField()
+    fichier = models.FileField(upload_to="modules/")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.titre

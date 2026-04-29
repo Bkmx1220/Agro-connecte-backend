@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import Expert, Consultation, Message, Paysan
+from .models import Expert, Consultation, Message, Module, Paysan
 
 User = get_user_model()
 
@@ -185,3 +185,20 @@ class MessageSerializer(serializers.ModelSerializer):
         )
 
         return super().create(validated_data)
+    
+# ============================================================
+# MODULE SERIALIZER
+# ============================================================
+class ModuleSerializer(serializers.ModelSerializer):
+    expert = UserSerializer(read_only=True)
+    fichier_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Module
+        fields = ["id", "titre", "description", "fichier", "fichier_url", "expert", "created_at"]
+
+    def get_fichier_url(self, obj):
+        request = self.context.get("request")
+        if obj.fichier:
+            return request.build_absolute_uri(obj.fichier.url)
+        return None
