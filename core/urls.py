@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 
 
 from .views import (
+    ElevageViewSet,
     ModuleViewSet,
     PaysanViewSet,
     RegisterAPIView,
@@ -13,10 +14,13 @@ from .views import (
     ConsultationViewSet,
     MessageViewSet,
     ModuleViewSet,
+    ElevageViewSet,
     MeAPIView,
     admin_pending_users,
     AdminVerifyUserView,
-    AdminDeleteUserView
+    AdminDeleteUserView,
+    suspend_user,
+    unsuspend_user, 
     
 )
 
@@ -28,6 +32,7 @@ router.register(r'paysans', PaysanViewSet, basename='paysans')
 router.register(r'consultations', ConsultationViewSet, basename='consultations')
 router.register(r'messages', MessageViewSet, basename='messages')
 router.register(r'modules', ModuleViewSet, basename='modules')
+router.register(r'elevages', ElevageViewSet, basename='elevages')
 
 urlpatterns = [
     # AUTH
@@ -47,4 +52,6 @@ urlpatterns = [
     
     path('admin/verify-user/<int:user_id>/', AdminVerifyUserView.as_view(), name='admin_verify_user'),
     path('admin/delete-user/<int:user_id>/', AdminDeleteUserView.as_view(), name='admin_delete_user'),
+    path('admin/users/suspend/<int:user_id>/', suspend_user, name='admin_suspend_user'),
+    path('admin/users/unsuspend/<int:user_id>/', unsuspend_user, name='admin_unsuspend_user'),
 ]

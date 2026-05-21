@@ -26,12 +26,8 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
 
 
 class IsExpert(BasePermission):
-    """Autorise uniquement les utilisateurs ayant un profil Expert."""
     def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return False
-
-        return Expert.objects.filter(user=request.user).exists()
+        return request.user.is_authenticated and request.user.role == "expert"
 
 
 
@@ -69,3 +65,9 @@ class IsMessageParticipant(permissions.BasePermission):
 class IsAdmin(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role == "admin"
+    
+# IMPORTANT : Eleveur - Accès aux ressources d’élevage  
+class IsEleveur(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == "eleveur"
+    

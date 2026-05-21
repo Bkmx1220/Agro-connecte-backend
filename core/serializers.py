@@ -129,7 +129,7 @@ class ConsultationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Consultation
         fields = [
-            'id', 'sujet', 'description',
+            'id', 'sujet', 'description', 'type_animal',
             'status', 'created_at',
             'paysan', 'expert'
         ]
@@ -202,3 +202,14 @@ class ModuleSerializer(serializers.ModelSerializer):
         if obj.fichier:
             return request.build_absolute_uri(obj.fichier.url)
         return None
+    
+# ============================================================
+# ELEVEUR SERIALIZER
+# ============================================================
+from .models import Elevage
+
+class ElevageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Elevage
+        fields = "__all__"
+        read_only_fields = ["user"]

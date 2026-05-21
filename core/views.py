@@ -10,24 +10,37 @@ from rest_framework.views import APIView
 
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Expert, Consultation, Message
+from .models import Elevage, Expert, Consultation, Message
 from .serializers import (
+    PaysanSerializer,
     UserSerializer,
     UserRegisterSerializer,
     ExpertSerializer,
     ConsultationSerializer,
     MessageSerializer,
+    ModuleSerializer,
+    ElevageSerializer,
 )
 from .permissions import (
     IsAdminOrReadOnly,
     IsOwnerOrReadOnly,
     IsExpert,
+    IsPaysan,
+    IsConsultationParticipant,
+    IsEleveur,
+    IsMessageParticipant                   
 )
 from rest_framework.decorators import api_view, permission_classes
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from .models import Module
-from .serializers import ModuleSerializer
+
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404
+from rest_framework.permissions import IsAdminUser
+
 
 User = get_user_model()
 
@@ -127,10 +140,9 @@ class MeAPIView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
-        user = self.request.user
-        if user.role != "paysan":
-            raise PermissionDenied("Accès réservé aux paysans")
-        return user
+      
+
+        return self.request.user
 
 
 # ============================================================
@@ -154,27 +166,52 @@ class UserViewSet(viewsets.ModelViewSet):
 class ExpertViewSet(viewsets.ModelViewSet):
     queryset = Expert.objects.select_related("user").all().order_by("-id")
     serializer_class = ExpertSerializer
-    permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
-
-    def get_serializer_class(self):
-        return ExpertSerializer
+    permission_classes = [IsAuthenticated]
 
     @action(
         detail=False,
-        methods=["get", "put"],
-        permission_classes=[IsAuthenticated, IsExpert],
+        methods=["get", "put", "post"],
+        permission_classes=[IsAuthenticated],
         url_path="me"
     )
     def me(self, request):
-        expert, _ = Expert.objects.get_or_create(
-            user=request.user,
-            defaults={
-                "domaine": "Agriculture générale",
-                "experience": 0,
-                "description": "Profil expert"
-            }
-        )
 
+        if request.user.role != "expert":
+            raise PermissionDenied("Accès réservé aux experts")
+
+        # ======================
+        # CREATE PROFILE
+        # ======================
+        if request.method == "POST":
+            if Expert.objects.filter(user=request.user).exists():
+                return Response(
+                    {"detail": "Profil existe déjà"},
+                    status=400
+                )
+
+            expert = Expert.objects.create(
+                user=request.user,
+                domaine=request.data.get("domaine", ""),
+                experience=request.data.get("experience", 0),
+                description=request.data.get("description", "")
+            )
+
+            return Response(ExpertSerializer(expert).data)
+
+        # ======================
+        # GET PROFILE
+        # ======================
+        try:
+            expert = Expert.objects.get(user=request.user)
+        except Expert.DoesNotExist:
+            return Response(
+                {"detail": "Profil non trouvé"},
+                status=404
+            )
+
+        # ======================
+        # UPDATE PROFILE
+        # ======================
         if request.method == "PUT":
             serializer = ExpertSerializer(
                 expert,
@@ -187,7 +224,6 @@ class ExpertViewSet(viewsets.ModelViewSet):
 
         return Response(ExpertSerializer(expert).data)
 
-
 # ============================================================
 # PAYSAN VIEWSET
 # ============================================================
@@ -196,90 +232,155 @@ class PaysanViewSet(viewsets.ViewSet):
 
     @action(
         detail=False,
-        methods=["get", "put"],
+        methods=["get", "post", "put"],  # ✅ ajout POST
         url_path="me"
     )
     def me(self, request):
         user = request.user
 
-        # Sécurité : uniquement paysan
+        # 🔐 Sécurité
         if user.role != "paysan":
             raise PermissionDenied("Accès réservé aux paysans")
 
-        # ==========================
-        # GET → profil paysan
-        # ==========================
+        # ========================
+        # 📥 GET → récupérer profil
+        # ========================
         if request.method == "GET":
             return Response({
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
-                "role": user.role,
                 "phone": user.phone,
                 "avatar": user.avatar.url if user.avatar else None,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
             })
 
-        # ==========================
-        # PUT → update profil
-        # ==========================
-        serializer = UserSerializer(
-            user,
-            data=request.data,
-            partial=True
-        )
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+        # ========================
+        # ➕ POST → créer profil
+        # ========================
+        if request.method == "POST":
+            serializer = UserSerializer(
+                user,
+                data=request.data,
+                partial=True
+            )
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
 
-        return Response(serializer.data)
+            return Response(serializer.data, status=201)
 
+        # ========================
+        # ✏️ PUT → modifier profil
+        # ========================
+        if request.method == "PUT":
+            serializer = UserSerializer(
+                user,
+                data=request.data,
+                partial=True
+            )
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
 
+            return Response(serializer.data)
 # ============================================================
 # CONSULTATION VIEWSET
 # ============================================================
+
 class ConsultationViewSet(viewsets.ModelViewSet):
     queryset = Consultation.objects.select_related(
         "paysan", "expert"
     ).all().order_by("-created_at")
+
     serializer_class = ConsultationSerializer
     permission_classes = [IsAuthenticated]
 
+    # =====================================================
+    # 📌 FILTRAGE DES CONSULTATIONS
+    # =====================================================
     def get_queryset(self):
         user = self.request.user
 
+        # Admin → voit tout
         if user.is_staff:
             return Consultation.objects.all()
 
+        # Expert → voit ses consultations
         if user.role == "expert":
             return Consultation.objects.filter(expert=user)
 
+        # Paysan + Éleveur → voient leurs consultations
         return Consultation.objects.filter(paysan=user)
 
+    # =====================================================
+    # 📌 CRÉATION CONSULTATION (PAYSAN + ELEVEUR)
+    # =====================================================
     def perform_create(self, serializer):
-        serializer.save(paysan=self.request.user)
+        user = self.request.user
 
+        # ❌ empêcher expert de créer
+        if user.role == "expert":
+            raise PermissionDenied("Un expert ne peut pas créer une consultation.")
+
+        # 🔥 récupérer expert depuis le frontend
+        expert_id = self.request.data.get("expert")
+
+        if not expert_id:
+            raise PermissionDenied("Vous devez sélectionner un expert.")
+
+        serializer.save(
+            paysan=user,       # paysan OU eleveur (même champ)
+            expert_id=expert_id
+        )
+
+    # =====================================================
+    # ✅ EXPERT ACCEPTE
+    # =====================================================
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsExpert])
     def accept(self, request, pk=None):
         consultation = self.get_object()
+
+        if consultation.expert != request.user:
+            raise PermissionDenied("Vous n'êtes pas assigné à cette consultation.")
+
         consultation.status = "accepted"
         consultation.save()
+
         return Response({"status": "accepted"})
 
+    # =====================================================
+    # ❌ EXPERT REFUSE
+    # =====================================================
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsExpert])
     def reject(self, request, pk=None):
         consultation = self.get_object()
+
+        if consultation.expert != request.user:
+            raise PermissionDenied("Vous n'êtes pas assigné à cette consultation.")
+
         consultation.status = "rejected"
         consultation.save()
+
         return Response({"status": "rejected"})
 
+    # =====================================================
+    # 🔒 CLOTURE (PAYSAN / ELEVEUR / ADMIN)
+    # =====================================================
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def close(self, request, pk=None):
         consultation = self.get_object()
+
+        if not (
+            request.user.is_staff or
+            consultation.paysan == request.user or
+            consultation.expert == request.user
+        ):
+            raise PermissionDenied("Accès refusé.")
+
         consultation.status = "completed"
         consultation.save()
-        return Response({"status": "completed"})
 
+        return Response({"status": "completed"})
 
 # ============================================================
 # MESSAGE VIEWSET
@@ -305,8 +406,6 @@ class MessageViewSet(viewsets.ModelViewSet):
 # ============================================================
 #  ADMIN API (VALIDATION UTILISATEURS)
 # ============================================================
-
-
 class AdminVerifyUserView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -390,6 +489,10 @@ def admin_delete_user(request, user_id):
     except User.DoesNotExist:
         return Response({"error": "Utilisateur introuvable"}, status=404)
     
+ # ============================================================
+ #  ModuleViewSet (Module de Guide)
+ # ============================================================
+   
 
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all().order_by("-created_at")
@@ -406,3 +509,59 @@ class ModuleViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Seuls les experts peuvent publier")
 
         serializer.save(expert=self.request.user)
+
+ # ============================================================
+ #  ElevageViewSet
+ # ============================================================
+ 
+
+class ElevageViewSet(viewsets.ModelViewSet):
+    queryset = Elevage.objects.all().order_by("-created_at")
+    serializer_class = ElevageSerializer
+    permission_classes = [IsAuthenticated, IsEleveur]
+
+    # 👇 Filtrer uniquement les élevages de l'utilisateur connecté
+    def get_queryset(self):
+        user = self.request.user
+
+        # Admin voit tout
+        if user.role == "admin":
+            return Elevage.objects.all()
+
+        # Eleveur voit seulement ses élevages
+        return Elevage.objects.filter(user=user)
+
+    # 👇 Lors de la création, on attache automatiquement l'utilisateur
+    def perform_create(self, serializer):
+        if self.request.user.role != "eleveur":
+            raise PermissionDenied("Seuls les éleveurs peuvent créer un élevage")
+
+        serializer.save(user=self.request.user)
+
+ # ============================================================ 
+ # Suspension / Réactivation d'un utilisateur (Admin)   
+ # ============================================================
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def suspend_user(request, user_id):
+
+    user = get_object_or_404(User, id=user_id)
+
+    user.is_suspended = True
+    user.save()
+
+    return Response({
+        "message": "Utilisateur suspendu"
+    })
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def unsuspend_user(request, user_id):
+
+    user = get_object_or_404(User, id=user_id)
+
+    user.is_suspended = False
+    user.save()
+
+    return Response({
+        "message": "Utilisateur réactivé"
+    })
