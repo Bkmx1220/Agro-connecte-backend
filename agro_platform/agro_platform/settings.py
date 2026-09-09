@@ -147,11 +147,13 @@ SIMPLE_JWT = {
 CORS_ALLOW_CREDENTIALS = False  # ❌ PAS DE COOKIES
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "https://agro-connect-partie-frontend.vercel.app",
 ]
 
 # ✅ OBLIGATOIRE POUR PUT / POST / PATCH depuis Vue
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
+    "https://agro-connect-partie-frontend.vercel.app",
 ]
 
 CSRF_COOKIE_HTTPONLY = False
