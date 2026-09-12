@@ -1,4 +1,5 @@
 from django.db import migrations
+from django.contrib.auth.hashers import make_password
 import os
 
 
@@ -25,7 +26,7 @@ def create_admin_if_missing(apps, schema_editor):
         is_active=True,
     )
 
-    user.set_password(password)
+    user.password = make_password(password)
     user.save()
 
 

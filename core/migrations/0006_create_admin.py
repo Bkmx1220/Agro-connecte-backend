@@ -1,4 +1,5 @@
 from django.db import migrations
+from django.contrib.auth.hashers import make_password
 import os
 
 
@@ -9,11 +10,9 @@ def create_admin(apps, schema_editor):
     email = os.environ.get("ADMIN_EMAIL")
     password = os.environ.get("ADMIN_PASSWORD")
 
-    # Si les variables ne sont pas définies, on ne fait rien
     if not username or not email or not password:
         return
 
-    # Évite de créer deux fois le même compte
     if User.objects.filter(username=username).exists():
         return
 
@@ -25,9 +24,9 @@ def create_admin(apps, schema_editor):
         is_superuser=True,
         is_verified=True,
         is_active=True,
+        password=make_password(password),
     )
 
-    user.set_password(password)
     user.save()
 
 
